@@ -129,6 +129,18 @@ func convertLibcontainerStats(ls *libcontainer.Stats) *types.Stats {
 	s.CPU.Throttling.ThrottledPeriods = cg.CpuStats.ThrottlingData.ThrottledPeriods
 	s.CPU.Throttling.ThrottledTime = cg.CpuStats.ThrottlingData.ThrottledTime
 
+	s.Cpuset.Cpus = cg.CpusetStats.Cpus
+	s.Cpuset.CpuExclusive = cg.CpusetStats.CpuExclusive
+	s.Cpuset.Mems = cg.CpusetStats.Mems
+	s.Cpuset.MemExclusive = cg.CpusetStats.MemExclusive
+	s.Cpuset.MemHardwall = cg.CpusetStats.MemHardwall
+	s.Cpuset.MemoryMigrate = cg.CpusetStats.MemoryMigrate
+	s.Cpuset.MemoryPressure = cg.CpusetStats.MemoryPressure
+	s.Cpuset.MemorySpreadPage = cg.CpusetStats.MemorySpreadPage
+	s.Cpuset.MemorySpreadSlab = cg.CpusetStats.MemorySpreadSlab
+	s.Cpuset.SchedLoadBalance = cg.CpusetStats.SchedLoadBalance
+	s.Cpuset.SchedRelaxDomainLevel = cg.CpusetStats.SchedRelaxDomainLevel
+
 	s.Memory.Cache = cg.MemoryStats.Cache
 	s.Memory.Kernel = convertMemoryEntry(cg.MemoryStats.KernelUsage)
 	s.Memory.KernelTCP = convertMemoryEntry(cg.MemoryStats.KernelTCPUsage)

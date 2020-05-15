@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fscommon"
@@ -48,7 +50,109 @@ func (s *CpusetGroup) Remove(d *cgroupData) error {
 	return removePath(d.path("cpuset"))
 }
 
+func getNumericStat(path string, filename string, extracted *[]uint16) error {
+	fileContent, err := fscommon.GetCgroupParamString(path, filename)
+	if err != nil {
+		return err
+	}
+	if len(fileContent) == 0 {
+		return fmt.Errorf("%s found to be empty", filepath.Join(path, filename))
+	}
+
+	for _, s := range strings.Split(fileContent, ",") {
+		if strings.Contains(s, "-") {
+			splitted := strings.Split(s, "-")
+			if len(splitted) != 2 {
+				return fmt.Errorf("Couldn't parse %s", filepath.Join(path, filename))
+			}
+			min, err := strconv.ParseUint(splitted[0], 10, 16)
+			if err != nil {
+				return err
+			}
+			max, err := strconv.ParseUint(splitted[1], 10, 16)
+			if err != nil {
+				return err
+			}
+			if min > max {
+				return fmt.Errorf("Couldn't parse %s", filepath.Join(path, filename))
+			}
+			for i := min; i <= max; i++ {
+				*extracted = append(*extracted, uint16(i))
+			}
+		} else {
+			value, err := strconv.ParseUint(s, 10, 16)
+			if err != nil {
+				return err
+			}
+			*extracted = append(*extracted, uint16(value))
+		}
+
+	}
+
+	return nil
+}
+
 func (s *CpusetGroup) GetStats(path string, stats *cgroups.Stats) error {
+	var (
+		err  error
+		cpus []uint16
+		mems []uint16
+	)
+	err = getNumericStat(path, "cpuset.cpus", &cpus)
+	if err != nil {
+		return err
+	}
+	cpuExclusive, err := fscommon.GetCgroupParamUint(path, "cpuset.cpu_exclusive")
+	if err != nil {
+		return err
+	}
+	err = getNumericStat(path, "cpuset.mems", &mems)
+	if err != nil {
+		return err
+	}
+	memHardwall, err := fscommon.GetCgroupParamUint(path, "cpuset.mem_hardwall")
+	if err != nil {
+		return err
+	}
+	memExclusive, err := fscommon.GetCgroupParamUint(path, "cpuset.mem_exclusive")
+	if err != nil {
+		return err
+	}
+	memoryMigrate, err := fscommon.GetCgroupParamUint(path, "cpuset.memory_migrate")
+	if err != nil {
+		return err
+	}
+	memorySpreadPage, err := fscommon.GetCgroupParamUint(path, "cpuset.memory_spread_page")
+	if err != nil {
+		return err
+	}
+	memorySpreadSlab, err := fscommon.GetCgroupParamUint(path, "cpuset.memory_spread_slab")
+	if err != nil {
+		return err
+	}
+	memoryPressure, err := fscommon.GetCgroupParamUint(path, "cpuset.memory_pressure")
+	if err != nil {
+		return err
+	}
+	schedLoadBalance, err := fscommon.GetCgroupParamUint(path, "cpuset.sched_load_balance")
+	if err != nil {
+		return err
+	}
+	schedRelaxDomainLevel, err := fscommon.GetCgroupParamInt(path, "cpuset.sched_relax_domain_level")
+	if err != nil {
+		return err
+	}
+	stats.CpusetStats.Cpus = cpus
+	stats.CpusetStats.CpuExclusive = cpuExclusive
+	stats.CpusetStats.Mems = mems
+	stats.CpusetStats.MemExclusive = memExclusive
+	stats.CpusetStats.MemHardwall = memHardwall
+	stats.CpusetStats.MemoryMigrate = memoryMigrate
+	stats.CpusetStats.MemorySpreadPage = memorySpreadPage
+	stats.CpusetStats.MemorySpreadSlab = memorySpreadSlab
+	stats.CpusetStats.MemoryPressure = memoryPressure
+	stats.CpusetStats.SchedLoadBalance = schedLoadBalance
+	stats.CpusetStats.SchedRelaxDomainLevel = schedRelaxDomainLevel
 	return nil
 }
 

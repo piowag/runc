@@ -72,6 +72,22 @@ func GetCgroupParamUint(cgroupPath, cgroupFile string) (uint64, error) {
 	return res, nil
 }
 
+// Gets a single int64 value from the specified cgroup file.
+func GetCgroupParamInt(cgroupPath, cgroupFile string) (int64, error) {
+	fileName := filepath.Join(cgroupPath, cgroupFile)
+	contents, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		return 0, err
+	}
+	trimmed := strings.TrimSpace(string(contents))
+
+	res, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil {
+		return res, fmt.Errorf("unable to parse %q as a int from Cgroup file %q", string(contents), fileName)
+	}
+	return res, nil
+}
+
 // Gets a string value from the specified cgroup file
 func GetCgroupParamString(cgroupPath, cgroupFile string) (string, error) {
 	contents, err := ioutil.ReadFile(filepath.Join(cgroupPath, cgroupFile))
