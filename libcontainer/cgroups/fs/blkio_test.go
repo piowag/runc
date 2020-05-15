@@ -13,43 +13,81 @@ import (
 
 const (
 	sectorsRecursiveContents      = `8:0 1024`
+	sectorsRecursiveContentsBFQ   = `8:0 2048`
 	serviceBytesRecursiveContents = `8:0 Read 100
 8:0 Write 200
 8:0 Sync 300
 8:0 Async 500
 8:0 Total 500
 Total 500`
+
+	serviceBytesRecursiveContentsBFQ = `8:0 Read 1100
+8:0 Write 1200
+8:0 Sync 1300
+8:0 Async 1500
+8:0 Total 1500
+Total 1500`
 	servicedRecursiveContents = `8:0 Read 10
 8:0 Write 40
 8:0 Sync 20
 8:0 Async 30
 8:0 Total 50
 Total 50`
+	servicedRecursiveContentsBFQ = `8:0 Read 11
+8:0 Write 41
+8:0 Sync 21
+8:0 Async 31
+8:0 Total 51
+Total 51`
 	queuedRecursiveContents = `8:0 Read 1
 8:0 Write 4
 8:0 Sync 2
 8:0 Async 3
 8:0 Total 5
 Total 5`
+	queuedRecursiveContentsBFQ = `8:0 Read 2
+8:0 Write 3
+8:0 Sync 4
+8:0 Async 5
+8:0 Total 6
+Total 6`
 	serviceTimeRecursiveContents = `8:0 Read 173959
 8:0 Write 0
 8:0 Sync 0
 8:0 Async 173959
 8:0 Total 17395
 Total 17395`
+	serviceTimeRecursiveContentsBFQ = `8:0 Read 173959
+8:0 Write 0
+8:0 Sync 0
+8:0 Async 173
+8:0 Total 174
+Total 174`
 	waitTimeRecursiveContents = `8:0 Read 15571
 8:0 Write 0
 8:0 Sync 0
 8:0 Async 15571
 8:0 Total 15571`
+	waitTimeRecursiveContentsBFQ = `8:0 Read 1557
+8:0 Write 0
+8:0 Sync 0
+8:0 Async 1557
+8:0 Total 1557`
 	mergedRecursiveContents = `8:0 Read 5
 8:0 Write 10
 8:0 Sync 0
 8:0 Async 0
 8:0 Total 15
 Total 15`
-	timeRecursiveContents = `8:0 8`
-	throttleServiceBytes  = `8:0 Read 11030528
+	mergedRecursiveContentsBFQ = `8:0 Read 51
+8:0 Write 101
+8:0 Sync 0
+8:0 Async 0
+8:0 Total 151
+Total 151`
+	timeRecursiveContents    = `8:0 8`
+	timeRecursiveContentsBFQ = `8:0 16`
+	throttleServiceBytes     = `8:0 Read 11030528
 8:0 Write 23
 8:0 Sync 42
 8:0 Async 11030528
@@ -60,6 +98,17 @@ Total 15`
 252:0 Async 11030528
 252:0 Total 11030528
 Total 22061056`
+	throttleServiceBytesRecursive = `8:0 Read 110305281
+8:0 Write 231
+8:0 Sync 421
+8:0 Async 110305281
+8:0 Total 110305281
+252:0 Read 110305281
+252:0 Write 231
+252:0 Sync 421
+252:0 Async 110305281
+252:0 Total 110305281
+Total 220610561`
 	throttleServiced = `8:0 Read 164
 8:0 Write 23
 8:0 Sync 42
@@ -71,6 +120,17 @@ Total 22061056`
 252:0 Async 164
 252:0 Total 164
 Total 328`
+	throttleServicedRecursive = `8:0 Read 1641
+8:0 Write 231
+8:0 Sync 421
+8:0 Async 1641
+8:0 Total 1641
+252:0 Read 1641
+252:0 Write 231
+252:0 Sync 421
+252:0 Async 1641
+252:0 Total 1641
+Total 3281`
 )
 
 func appendBlkioStatEntry(blkioStatEntries *[]cgroups.BlkioStatEntry, major, minor, value uint64, op string) {
@@ -174,7 +234,250 @@ func TestBlkioSetMultipleWeightDevice(t *testing.T) {
 	}
 }
 
-func TestBlkioStats(t *testing.T) {
+func TestBlkioBFQDebugStats(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContentsBFQ,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContentsBFQ,
+		"blkio.bfq.io_queued_recursive":        queuedRecursiveContentsBFQ,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContentsBFQ,
+		"blkio.bfq.io_wait_time_recursive":     waitTimeRecursiveContentsBFQ,
+		"blkio.bfq.io_merged_recursive":        mergedRecursiveContentsBFQ,
+		"blkio.bfq.time_recursive":             timeRecursiveContentsBFQ,
+		"blkio.bfq.sectors_recursive":          sectorsRecursiveContentsBFQ,
+	})
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedStats := cgroups.BlkioStats{}
+	appendBlkioStatEntry(&expectedStats.SectorsRecursive, 8, 0, 2048, "")
+
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1100, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1200, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1300, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1500, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1500, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 11, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 41, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 21, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 31, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 51, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoQueuedRecursive, 8, 0, 2, "Read")
+	appendBlkioStatEntry(&expectedStats.IoQueuedRecursive, 8, 0, 3, "Write")
+	appendBlkioStatEntry(&expectedStats.IoQueuedRecursive, 8, 0, 4, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoQueuedRecursive, 8, 0, 5, "Async")
+	appendBlkioStatEntry(&expectedStats.IoQueuedRecursive, 8, 0, 6, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoServiceTimeRecursive, 8, 0, 173959, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServiceTimeRecursive, 8, 0, 0, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServiceTimeRecursive, 8, 0, 0, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServiceTimeRecursive, 8, 0, 173, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServiceTimeRecursive, 8, 0, 174, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoWaitTimeRecursive, 8, 0, 1557, "Read")
+	appendBlkioStatEntry(&expectedStats.IoWaitTimeRecursive, 8, 0, 0, "Write")
+	appendBlkioStatEntry(&expectedStats.IoWaitTimeRecursive, 8, 0, 0, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoWaitTimeRecursive, 8, 0, 1557, "Async")
+	appendBlkioStatEntry(&expectedStats.IoWaitTimeRecursive, 8, 0, 1557, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoMergedRecursive, 8, 0, 51, "Read")
+	appendBlkioStatEntry(&expectedStats.IoMergedRecursive, 8, 0, 101, "Write")
+	appendBlkioStatEntry(&expectedStats.IoMergedRecursive, 8, 0, 0, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoMergedRecursive, 8, 0, 0, "Async")
+	appendBlkioStatEntry(&expectedStats.IoMergedRecursive, 8, 0, 151, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoTimeRecursive, 8, 0, 16, "")
+
+	expectBlkioStatsEquals(t, expectedStats, actualStats.BlkioStats)
+}
+
+func TestBlkioBFQStats(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContentsBFQ,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContentsBFQ,
+	})
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedStats := cgroups.BlkioStats{}
+
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1100, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1200, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1300, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1500, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 1500, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 11, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 41, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 21, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 31, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 51, "Total")
+
+	expectBlkioStatsEquals(t, expectedStats, actualStats.BlkioStats)
+
+}
+
+func TestBlkioStatsNoServiceBytesFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_serviced_recursive":     servicedRecursiveContents,
+		"blkio.bfq.io_queued_recursive":       queuedRecursiveContents,
+		"blkio.bfq.sectors_recursive":         sectorsRecursiveContents,
+		"blkio.bfq.io_service_time_recursive": serviceTimeRecursiveContents,
+		"blkio.bfq.io_wait_time_recursive":    waitTimeRecursiveContents,
+		"blkio.bfq.io_merged_recursive":       mergedRecursiveContents,
+		"blkio.bfq.time_recursive":            timeRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioStatsNoServicedFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContents,
+		"blkio.bfq.io_queued_recursive":        queuedRecursiveContents,
+		"blkio.bfq.sectors_recursive":          sectorsRecursiveContents,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContents,
+		"blkio.bfq.io_wait_time_recursive":     waitTimeRecursiveContents,
+		"blkio.bfq.io_merged_recursive":        mergedRecursiveContents,
+		"blkio.bfq.time_recursive":             timeRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioStatsNoQueuedFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContents,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContents,
+		"blkio.bfq.sectors_recursive":          sectorsRecursiveContents,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContents,
+		"blkio.bfq.io_wait_time_recursive":     waitTimeRecursiveContents,
+		"blkio.bfq.io_merged_recursive":        mergedRecursiveContents,
+		"blkio.bfq.time_recursive":             timeRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioStatsNoSectorsFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContents,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContents,
+		"blkio.bfq.io_queued_recursive":        queuedRecursiveContents,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContents,
+		"blkio.bfq.io_wait_time_recursive":     waitTimeRecursiveContents,
+		"blkio.bfq.io_merged_recursive":        mergedRecursiveContents,
+		"blkio.bfq.time_recursive":             timeRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioStatsNoWaitTimeFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContents,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContents,
+		"blkio.bfq.io_queued_recursive":        queuedRecursiveContents,
+		"blkio.bfq.sectors_recursive":          sectorsRecursiveContents,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContents,
+		"blkio.bfq.io_merged_recursive":        mergedRecursiveContents,
+		"blkio.bfq.time_recursive":             timeRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioStatsNoMergedFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContents,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContents,
+		"blkio.bfq.io_queued_recursive":        queuedRecursiveContents,
+		"blkio.bfq.sectors_recursive":          sectorsRecursiveContents,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContents,
+		"blkio.bfq.io_wait_time_recursive":     waitTimeRecursiveContents,
+		"blkio.bfq.time_recursive":             timeRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioStatsNoTimeFileBFQDebug(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.bfq.io_service_bytes_recursive": serviceBytesRecursiveContents,
+		"blkio.bfq.io_serviced_recursive":      servicedRecursiveContents,
+		"blkio.bfq.io_queued_recursive":        queuedRecursiveContents,
+		"blkio.bfq.sectors_recursive":          sectorsRecursiveContents,
+		"blkio.bfq.io_service_time_recursive":  serviceTimeRecursiveContents,
+		"blkio.bfq.io_wait_time_recursive":     waitTimeRecursiveContents,
+		"blkio.bfq.io_merged_recursive":        mergedRecursiveContents,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatalf("Failed unexpectedly: %s", err)
+	}
+}
+
+func TestBlkioCFQStats(t *testing.T) {
 	helper := NewCgroupTestUtil("blkio", t)
 	defer helper.cleanup()
 	helper.writeFileContents(map[string]string{
@@ -464,7 +767,60 @@ func TestBlkioStatsUnexpectedFieldType(t *testing.T) {
 	}
 }
 
-func TestNonCFQBlkioStats(t *testing.T) {
+func TestThrottleRecursiveBlkioStats(t *testing.T) {
+	helper := NewCgroupTestUtil("blkio", t)
+	defer helper.cleanup()
+	helper.writeFileContents(map[string]string{
+		"blkio.io_service_bytes_recursive":          "",
+		"blkio.io_serviced_recursive":               "",
+		"blkio.io_queued_recursive":                 "",
+		"blkio.sectors_recursive":                   "",
+		"blkio.io_service_time_recursive":           "",
+		"blkio.io_wait_time_recursive":              "",
+		"blkio.io_merged_recursive":                 "",
+		"blkio.time_recursive":                      "",
+		"blkio.throttle.io_service_bytes":           throttleServiceBytes,
+		"blkio.throttle.io_serviced":                throttleServiced,
+		"blkio.throttle.io_service_bytes_recursive": throttleServiceBytesRecursive,
+		"blkio.throttle.io_serviced_recursive":      throttleServicedRecursive,
+	})
+
+	blkio := &BlkioGroup{}
+	actualStats := *cgroups.NewStats()
+	err := blkio.GetStats(helper.CgroupPath, &actualStats)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify expected stats.
+	expectedStats := cgroups.BlkioStats{}
+
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 110305281, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 231, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 421, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 110305281, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 8, 0, 110305281, "Total")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 252, 0, 110305281, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 252, 0, 231, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 252, 0, 421, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 252, 0, 110305281, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServiceBytesRecursive, 252, 0, 110305281, "Total")
+
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 1641, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 231, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 421, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 1641, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 8, 0, 1641, "Total")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 252, 0, 1641, "Read")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 252, 0, 231, "Write")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 252, 0, 421, "Sync")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 252, 0, 1641, "Async")
+	appendBlkioStatEntry(&expectedStats.IoServicedRecursive, 252, 0, 1641, "Total")
+
+	expectBlkioStatsEquals(t, expectedStats, actualStats.BlkioStats)
+}
+
+func TestThrottleBlkioStats(t *testing.T) {
 	helper := NewCgroupTestUtil("blkio", t)
 	defer helper.cleanup()
 	helper.writeFileContents(map[string]string{

@@ -166,11 +166,81 @@ func getBlkioStat(path string) ([]cgroups.BlkioStatEntry, error) {
 }
 
 func (s *BlkioGroup) GetStats(path string, stats *cgroups.Stats) error {
-	// Try to read CFQ stats available on all CFQ enabled kernels first
+	// Try to read BFQ stats with debug files enabled first
+	if blkioStats, err := getBlkioStat(filepath.Join(path, "blkio.bfq.io_service_time_recursive")); err == nil && blkioStats != nil {
+		return getBFQDebugStats(path, stats)
+	}
+	// Try to read BFQ stats with debug files disabled
+	if blkioStats, err := getBlkioStat(filepath.Join(path, "blkio.bfq.io_serviced_recursive")); err == nil && blkioStats != nil {
+		return getBFQStats(path, stats)
+	}
+	// Try to read CFQ stats available on all CFQ enabled kernels
 	if blkioStats, err := getBlkioStat(filepath.Join(path, "blkio.io_serviced_recursive")); err == nil && blkioStats != nil {
 		return getCFQStats(path, stats)
 	}
+	// Try to read recursive version of generic stats
+	if blkioStats, err := getBlkioStat(filepath.Join(path, "blkio.throttle.io_serviced_recursive")); err == nil && blkioStats != nil {
+		return getRecursiveThrottleStats(path, stats)
+	}
 	return getStats(path, stats) // Use generic stats as fallback
+}
+
+func getBFQStats(path string, stats *cgroups.Stats) error {
+	var blkioStats []cgroups.BlkioStatEntry
+	var err error
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.io_serviced_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoServicedRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.io_service_bytes_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoServiceBytesRecursive = blkioStats
+
+	return nil
+}
+
+func getBFQDebugStats(path string, stats *cgroups.Stats) error {
+	var blkioStats []cgroups.BlkioStatEntry
+	var err error
+
+	if err = getBFQStats(path, stats); err != nil {
+		return err
+	}
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.sectors_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.SectorsRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.io_service_time_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoServiceTimeRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.io_wait_time_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoWaitTimeRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.io_merged_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoMergedRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.io_queued_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoQueuedRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.bfq.time_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoTimeRecursive = blkioStats
+
+	return nil
 }
 
 func getCFQStats(path string, stats *cgroups.Stats) error {
@@ -216,6 +286,23 @@ func getCFQStats(path string, stats *cgroups.Stats) error {
 		return err
 	}
 	stats.BlkioStats.IoTimeRecursive = blkioStats
+
+	return nil
+}
+
+func getRecursiveThrottleStats(path string, stats *cgroups.Stats) error {
+	var blkioStats []cgroups.BlkioStatEntry
+	var err error
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.throttle.io_service_bytes_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoServiceBytesRecursive = blkioStats
+
+	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.throttle.io_serviced_recursive")); err != nil {
+		return err
+	}
+	stats.BlkioStats.IoServicedRecursive = blkioStats
 
 	return nil
 }
